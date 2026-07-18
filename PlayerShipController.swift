@@ -70,7 +70,10 @@ final class PlayerShipController {
         let lateralInput: Float = isTurningRight ? 1 : (isTurningLeft ? -1 : 0)
         let verticalInput: Float = isAimingUp ? 1 : (isAimingDown ? -1 : 0)
 
-        currentRollDegrees = smoothed(current: currentRollDegrees, target: lateralInput * Self.rollAngleMaxDegrees, speed: Self.rollSmoothingSpeed, dt: dt)
+        // Signe négatif : avec le forward -Z / up +Y / right +X standard de SceneKit,
+        // une rotation Z positive lève le côté droit (bank gauche) — on veut l'inverse
+        // (bank à droite, côté droit qui descend) quand on tourne à droite.
+        currentRollDegrees = smoothed(current: currentRollDegrees, target: -lateralInput * Self.rollAngleMaxDegrees, speed: Self.rollSmoothingSpeed, dt: dt)
         currentPitchDegrees = smoothed(current: currentPitchDegrees, target: verticalInput * Self.pitchAngleMaxDegrees, speed: Self.pitchSmoothingSpeed, dt: dt)
 
         (positionX, lateralVelocity) = updatedAxis(

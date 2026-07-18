@@ -115,19 +115,19 @@ final class GameScene {
 
         // Ces .dae embarquent un BOM UTF-8 avant la déclaration XML (confirmé par
         // inspection des octets bruts). Un parseur XML tolérant l'ignore, mais
-        // l'importeur COLLADA de SceneKit le refuse et échoue silencieusement au
-        // chargement — c'était la vraie cause des modèles invisibles/placeholder.
+        // l'importeur COLLADA de SceneKit le refuse.
         if data.starts(with: Self.utf8BOM) {
             data.removeFirst(Self.utf8BOM.count)
         }
 
-        guard let sceneSource = SCNSceneSource(data: data, options: nil) else {
-            print("⚠️ SpaceInvaders3D: SCNSceneSource n'a pas pu être créé pour \(name).dae")
-            return placeholderNode()
-        }
-
+        // SCNSceneSource(data:) sans extension de fichier associée ne détecte pas
+        // toujours correctement un COLLADA — on réécrit une copie sans BOM dans
+        // tmp/ (avec l'extension .dae conservée) et on recharge via l'API basée
+        // sur URL, dont la détection de format est fiable.
+        let strippedURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-nobom.dae")
         do {
-            let source = try sceneSource.scene(options: nil)
+            try data.write(to: strippedURL, options: .atomic)
+            let source = try SCNScene(url: strippedURL, options: nil)
             let node = source.rootNode.clone()
             // Certains exports .dae ont un winding order inversé : sans double-face,
             // SceneKit peut culler la totalité des triangles et rendre le modèle invisible
