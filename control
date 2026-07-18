@@ -1,0 +1,9 @@
+Package: fr.gcourtot.spaceinvaders3d
+Name: SpaceInvaders3D
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Space Invaders 3D - SceneKit POC
+Maintainer: nem0oo
+Author: nem0oo
+Section: Games
+Depends: firmware (>= 15.5)

@@ -1,0 +1,16 @@
+{
+    "waveIndex": 2,
+    "columns": 5,
+    "rows": 3,
+    "horizontalSpacing": 2.1,
+    "verticalSpacing": 1.6,
+    "startZ": -64.0,
+    "swayRange": 4.5,
+    "swaySpeed": 0.72,
+    "advanceSpeed": 1.65,
+    "alienScale": 1.0,
+    "alienTint": [0.95, 0.75, 0.2],
+    "minFireInterval": 1.5,
+    "maxFireInterval": 3.1,
+    "fireIntervalFloor": 0.5
+}
