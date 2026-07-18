@@ -104,13 +104,30 @@ final class GameScene {
         }
     }
 
+    private static let utf8BOM: [UInt8] = [0xEF, 0xBB, 0xBF]
+
     private static func loadModelNode(named name: String) -> SCNNode {
-        guard let url = Bundle.assetURL(name, withExtension: "dae") else {
+        guard let url = Bundle.assetURL(name, withExtension: "dae"),
+              var data = try? Data(contentsOf: url) else {
             print("⚠️ SpaceInvaders3D: \(name).dae introuvable dans le bundle (Assets/)")
             return placeholderNode()
         }
+
+        // Ces .dae embarquent un BOM UTF-8 avant la déclaration XML (confirmé par
+        // inspection des octets bruts). Un parseur XML tolérant l'ignore, mais
+        // l'importeur COLLADA de SceneKit le refuse et échoue silencieusement au
+        // chargement — c'était la vraie cause des modèles invisibles/placeholder.
+        if data.starts(with: Self.utf8BOM) {
+            data.removeFirst(Self.utf8BOM.count)
+        }
+
+        guard let sceneSource = SCNSceneSource(data: data, options: nil) else {
+            print("⚠️ SpaceInvaders3D: SCNSceneSource n'a pas pu être créé pour \(name).dae")
+            return placeholderNode()
+        }
+
         do {
-            let source = try SCNScene(url: url, options: nil)
+            let source = try sceneSource.scene(options: nil)
             let node = source.rootNode.clone()
             // Certains exports .dae ont un winding order inversé : sans double-face,
             // SceneKit peut culler la totalité des triangles et rendre le modèle invisible

@@ -12,6 +12,8 @@ import UIKit
 protocol HUDOverlayDelegate: AnyObject {
     func hudDidChangeTurningLeft(_ isPressed: Bool)
     func hudDidChangeTurningRight(_ isPressed: Bool)
+    func hudDidChangeAimingUp(_ isPressed: Bool)
+    func hudDidChangeAimingDown(_ isPressed: Bool)
     func hudDidTapFire()
     func hudDidTapCameraModeCycle()
     func hudDidTapReplay()
@@ -21,7 +23,8 @@ final class HUDOverlay: UIView {
 
     // MARK: - Constantes ajustables (mise en page)
 
-    static let turnButtonSize: CGFloat = 84
+    /// Boutons du D-pad (gauche/droite/haut/bas), plus petits qu'avant pour que les 4 tiennent en croix.
+    static let dpadButtonSize: CGFloat = 76
     static let fireButtonSize: CGFloat = 96
     static let cameraButtonSize: CGFloat = 56
     static let edgeMargin: CGFloat = 28
@@ -34,6 +37,8 @@ final class HUDOverlay: UIView {
 
     private let turnLeftButton = UIButton(type: .custom)
     private let turnRightButton = UIButton(type: .custom)
+    private let aimUpButton = UIButton(type: .custom)
+    private let aimDownButton = UIButton(type: .custom)
     private let fireButton = UIButton(type: .custom)
     private let cameraModeButton = UIButton(type: .custom)
     private let cameraModeLabel = UILabel()
@@ -72,8 +77,10 @@ final class HUDOverlay: UIView {
     }
 
     private func setupControls() {
-        styleControlButton(turnLeftButton, systemImage: "arrowtriangle.left.fill", size: Self.turnButtonSize)
-        styleControlButton(turnRightButton, systemImage: "arrowtriangle.right.fill", size: Self.turnButtonSize)
+        styleControlButton(turnLeftButton, systemImage: "chevron.left.circle.fill", size: Self.dpadButtonSize)
+        styleControlButton(turnRightButton, systemImage: "chevron.right.circle.fill", size: Self.dpadButtonSize)
+        styleControlButton(aimUpButton, systemImage: "chevron.up.circle.fill", size: Self.dpadButtonSize)
+        styleControlButton(aimDownButton, systemImage: "chevron.down.circle.fill", size: Self.dpadButtonSize)
         styleControlButton(fireButton, systemImage: "bolt.fill", size: Self.fireButtonSize)
         styleControlButton(cameraModeButton, systemImage: "camera.rotate.fill", size: Self.cameraButtonSize)
 
@@ -83,11 +90,19 @@ final class HUDOverlay: UIView {
         turnRightButton.addTarget(self, action: #selector(turnRightDown), for: .touchDown)
         turnRightButton.addTarget(self, action: #selector(turnRightUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
 
+        aimUpButton.addTarget(self, action: #selector(aimUpDown), for: .touchDown)
+        aimUpButton.addTarget(self, action: #selector(aimUpUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+
+        aimDownButton.addTarget(self, action: #selector(aimDownDown), for: .touchDown)
+        aimDownButton.addTarget(self, action: #selector(aimDownUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
+
         fireButton.addTarget(self, action: #selector(fireTapped), for: .touchUpInside)
         cameraModeButton.addTarget(self, action: #selector(cameraModeTapped), for: .touchUpInside)
 
         addSubview(turnLeftButton)
         addSubview(turnRightButton)
+        addSubview(aimUpButton)
+        addSubview(aimDownButton)
         addSubview(fireButton)
         addSubview(cameraModeButton)
 
@@ -164,14 +179,16 @@ final class HUDOverlay: UIView {
             height: Self.crosshairSize
         )
 
-        turnLeftButton.center = CGPoint(
-            x: Self.edgeMargin + Self.turnButtonSize / 2,
-            y: bounds.maxY - Self.edgeMargin - Self.turnButtonSize / 2
-        )
-        turnRightButton.center = CGPoint(
-            x: turnLeftButton.center.x + Self.turnButtonSize + Self.buttonSpacing,
-            y: turnLeftButton.center.y
-        )
+        // D-pad en croix : gauche/droite virent (roll + latéral), haut/bas visent
+        // les différentes lignes de la formation (pitch + vertical).
+        let dpadStep = Self.dpadButtonSize + Self.buttonSpacing
+        let dpadCenterX = Self.edgeMargin + Self.dpadButtonSize / 2 + dpadStep
+        let dpadCenterY = bounds.maxY - Self.edgeMargin - Self.dpadButtonSize / 2 - dpadStep
+
+        turnLeftButton.center = CGPoint(x: dpadCenterX - dpadStep, y: dpadCenterY)
+        turnRightButton.center = CGPoint(x: dpadCenterX + dpadStep, y: dpadCenterY)
+        aimUpButton.center = CGPoint(x: dpadCenterX, y: dpadCenterY - dpadStep)
+        aimDownButton.center = CGPoint(x: dpadCenterX, y: dpadCenterY + dpadStep)
 
         fireButton.center = CGPoint(
             x: bounds.maxX - Self.edgeMargin - Self.fireButtonSize / 2,
@@ -241,6 +258,26 @@ final class HUDOverlay: UIView {
     @objc private func turnRightUp() {
         turnRightButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
         delegate?.hudDidChangeTurningRight(false)
+    }
+
+    @objc private func aimUpDown() {
+        aimUpButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
+        delegate?.hudDidChangeAimingUp(true)
+    }
+
+    @objc private func aimUpUp() {
+        aimUpButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
+        delegate?.hudDidChangeAimingUp(false)
+    }
+
+    @objc private func aimDownDown() {
+        aimDownButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
+        delegate?.hudDidChangeAimingDown(true)
+    }
+
+    @objc private func aimDownUp() {
+        aimDownButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
+        delegate?.hudDidChangeAimingDown(false)
     }
 
     @objc private func fireTapped() {

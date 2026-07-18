@@ -86,7 +86,7 @@ final class GameViewController: UIViewController {
         guard !gameState.isGameOver else { return }
 
         shipController.update(deltaTime: deltaTime)
-        gameScene.cameraRig.update(deltaTime: deltaTime, shipPositionX: shipController.positionX)
+        gameScene.cameraRig.update(deltaTime: deltaTime, shipPositionX: shipController.positionX, shipPositionY: shipController.positionY)
         alienFormation.update(deltaTime: deltaTime)
         projectileManager.update(deltaTime: deltaTime)
         gameState.update(deltaTime: deltaTime)
@@ -136,6 +136,8 @@ final class GameViewController: UIViewController {
         }
         shipController.isTurningLeft = false
         shipController.isTurningRight = false
+        shipController.isAimingUp = false
+        shipController.isAimingDown = false
         hud.hideGameOver()
     }
 }
@@ -160,6 +162,14 @@ extension GameViewController: HUDOverlayDelegate {
 
     func hudDidChangeTurningRight(_ isPressed: Bool) {
         shipController.isTurningRight = isPressed
+    }
+
+    func hudDidChangeAimingUp(_ isPressed: Bool) {
+        shipController.isAimingUp = isPressed
+    }
+
+    func hudDidChangeAimingDown(_ isPressed: Bool) {
+        shipController.isAimingDown = isPressed
     }
 
     func hudDidTapFire() {
