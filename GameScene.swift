@@ -90,7 +90,7 @@ final class GameScene {
         system.particleImage = GameScene.generateStarParticleImage()
 
         let node = SCNNode()
-        node.particleSystems = [system]
+        node.addParticleSystem(system)
         scene.rootNode.addChildNode(node)
     }
 

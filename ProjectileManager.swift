@@ -116,7 +116,7 @@ final class ProjectileManager {
     func spawnExplosion(at worldPosition: SCNVector3) {
         let explosionNode = SCNNode()
         explosionNode.position = worldPosition
-        explosionNode.particleSystems = [makeExplosionParticleSystem()]
+        explosionNode.addParticleSystem(makeExplosionParticleSystem())
         parentNode.addChildNode(explosionNode)
 
         let wait = SCNAction.wait(duration: Self.explosionDuration)
