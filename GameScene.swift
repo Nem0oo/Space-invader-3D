@@ -110,7 +110,7 @@ final class GameScene {
             return placeholderNode()
         }
         do {
-            let source = try SCNScene(url: url, options: [.checkConsistency: true])
+            let source = try SCNScene(url: url, options: nil)
             let node = source.rootNode.clone()
             // Certains exports .dae ont un winding order inversé : sans double-face,
             // SceneKit peut culler la totalité des triangles et rendre le modèle invisible
