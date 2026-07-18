@@ -2,7 +2,7 @@
 // GameScene.swift
 //
 // Mise en place SceneKit : skybox, champ d'étoiles procédural, éclairage,
-// chargement des modèles .dae et hiérarchie de base de la scène. Ne contient
+// chargement des modèles .obj et hiérarchie de base de la scène. Ne contient
 // aucune logique de jeu (déléguée à PlayerShipController/CameraRig/
 // AlienFormation/ProjectileManager/GameState).
 //
@@ -104,8 +104,6 @@ final class GameScene {
         }
     }
 
-    private static let utf8BOM: [UInt8] = [0xEF, 0xBB, 0xBF]
-
     /// Diagnostics de chargement d'assets, affichables directement dans le HUD
     /// (GameViewController) — évite de dépendre d'un accès aux logs système, pas
     /// toujours disponible selon l'outil de sideload utilisé.
@@ -116,37 +114,25 @@ final class GameScene {
         loadDiagnostics.append(message)
     }
 
+    /// .dae (COLLADA) échouait systématiquement au chargement sur device avec une
+    /// erreur opaque côté SceneKit (voir historique du projet) ; .obj passe par le
+    /// même chemin d'import que ModelIO utilise couramment et n'a pas ce problème.
+    /// Le .mtl associé (mêmes noms/couleurs que dans les .dae d'origine, vérifiés
+    /// par recoupement du nombre de triangles par matériau) fournit les couleurs.
     private static func loadModelNode(named name: String) -> SCNNode {
-        guard let url = Bundle.assetURL(name, withExtension: "dae") else {
-            recordDiagnostic("\(name).dae : Bundle.assetURL a retourné nil (fichier introuvable dans Assets/)")
-            return placeholderNode()
-        }
-        guard var data = try? Data(contentsOf: url) else {
-            recordDiagnostic("\(name).dae : Data(contentsOf:) a échoué pour \(url.path)")
+        guard let url = Bundle.assetURL(name, withExtension: "obj") else {
+            recordDiagnostic("\(name).obj : Bundle.assetURL a retourné nil (fichier introuvable dans Assets/)")
             return placeholderNode()
         }
 
-        // Ces .dae embarquent un BOM UTF-8 avant la déclaration XML (confirmé par
-        // inspection des octets bruts). Un parseur XML tolérant l'ignore, mais
-        // l'importeur COLLADA de SceneKit le refuse.
-        if data.starts(with: Self.utf8BOM) {
-            data.removeFirst(Self.utf8BOM.count)
-        }
-
-        // SCNSceneSource(data:) sans extension de fichier associée ne détecte pas
-        // toujours correctement un COLLADA — on réécrit une copie sans BOM dans
-        // tmp/ (avec l'extension .dae conservée) et on recharge via l'API basée
-        // sur URL, dont la détection de format est fiable.
-        let strippedURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-nobom.dae")
         do {
-            try data.write(to: strippedURL, options: .atomic)
-            let source = try SCNScene(url: strippedURL, options: nil)
+            let source = try SCNScene(url: url, options: nil)
             let node = source.rootNode.clone()
             guard !node.childNodes.isEmpty else {
-                recordDiagnostic("\(name).dae : chargé sans erreur mais rootNode.childNodes est vide")
+                recordDiagnostic("\(name).obj : chargé sans erreur mais rootNode.childNodes est vide")
                 return placeholderNode()
             }
-            // Certains exports .dae ont un winding order inversé : sans double-face,
+            // Certains exports ont un winding order inversé : sans double-face,
             // SceneKit peut culler la totalité des triangles et rendre le modèle invisible
             // tout en le gardant fonctionnellement en place (transform/collisions correctes).
             node.enumerateHierarchy { child, _ in
@@ -154,7 +140,7 @@ final class GameScene {
             }
             return node
         } catch {
-            recordDiagnostic("\(name).dae : échec SCNScene(url:) — \(error)")
+            recordDiagnostic("\(name).obj : échec SCNScene(url:) — \(error)")
             return placeholderNode()
         }
     }
