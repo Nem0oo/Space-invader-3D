@@ -105,16 +105,36 @@ final class GameScene {
     }
 
     private static func loadModelNode(named name: String) -> SCNNode {
-        guard let url = Bundle.assetURL(name, withExtension: "dae"),
-              let source = try? SCNScene(url: url, options: nil) else {
-            assertionFailure("Impossible de charger le modèle \(name).dae depuis le bundle")
-            return SCNNode()
+        guard let url = Bundle.assetURL(name, withExtension: "dae") else {
+            print("⚠️ SpaceInvaders3D: \(name).dae introuvable dans le bundle (Assets/)")
+            return placeholderNode()
         }
-        let container = SCNNode()
-        for child in source.rootNode.childNodes {
-            container.addChildNode(child)
+        do {
+            let source = try SCNScene(url: url, options: [.checkConsistency: true])
+            let node = source.rootNode.clone()
+            // Certains exports .dae ont un winding order inversé : sans double-face,
+            // SceneKit peut culler la totalité des triangles et rendre le modèle invisible
+            // tout en le gardant fonctionnellement en place (transform/collisions correctes).
+            node.enumerateHierarchy { child, _ in
+                child.geometry?.materials.forEach { $0.isDoubleSided = true }
+            }
+            return node
+        } catch {
+            print("⚠️ SpaceInvaders3D: échec de chargement de \(name).dae : \(error)")
+            return placeholderNode()
         }
-        return container
+    }
+
+    /// Repère visuel volontairement voyant : si un modèle ne charge pas, ça doit se voir
+    /// (plutôt qu'un nœud vide invisible qui masque complètement le problème).
+    private static func placeholderNode() -> SCNNode {
+        let box = SCNBox(width: 1, height: 0.4, length: 1.6, chamferRadius: 0.05)
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor.magenta
+        material.emission.contents = UIColor.magenta
+        material.isDoubleSided = true
+        box.materials = [material]
+        return SCNNode(geometry: box)
     }
 }
 

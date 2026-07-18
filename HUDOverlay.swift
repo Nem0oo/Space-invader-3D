@@ -28,6 +28,7 @@ final class HUDOverlay: UIView {
     static let buttonSpacing: CGFloat = 14
     static let controlAlpha: CGFloat = 0.32
     static let controlAlphaPressed: CGFloat = 0.55
+    static let crosshairSize: CGFloat = 34
 
     weak var delegate: HUDOverlayDelegate?
 
@@ -38,6 +39,7 @@ final class HUDOverlay: UIView {
     private let cameraModeLabel = UILabel()
     private let scoreLabel = UILabel()
     private let livesLabel = UILabel()
+    private let crosshairView = UIImageView()
 
     private let gameOverView = UIView()
     private let gameOverTitleLabel = UILabel()
@@ -47,6 +49,7 @@ final class HUDOverlay: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
+        setupCrosshair()
         setupControls()
         setupHUDLabels()
         setupGameOverView()
@@ -55,6 +58,18 @@ final class HUDOverlay: UIView {
     required init?(coder: NSCoder) { fatalError("init(coder:) non supporté") }
 
     // MARK: - Setup
+
+    /// Viseur fixe au centre de l'écran : le tir part toujours tout droit depuis le
+    /// nez du vaisseau (pas de visée indépendante), donc un repère central suffit à
+    /// indiquer où on tire.
+    private func setupCrosshair() {
+        let config = UIImage.SymbolConfiguration(pointSize: Self.crosshairSize * 0.8, weight: .light)
+        crosshairView.image = UIImage(systemName: "scope", withConfiguration: config)
+        crosshairView.tintColor = UIColor.white.withAlphaComponent(0.75)
+        crosshairView.contentMode = .scaleAspectFit
+        crosshairView.isUserInteractionEnabled = false
+        addSubview(crosshairView)
+    }
 
     private func setupControls() {
         styleControlButton(turnLeftButton, systemImage: "arrowtriangle.left.fill", size: Self.turnButtonSize)
@@ -141,6 +156,13 @@ final class HUDOverlay: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+
+        crosshairView.frame = CGRect(
+            x: bounds.midX - Self.crosshairSize / 2,
+            y: bounds.midY - Self.crosshairSize / 2,
+            width: Self.crosshairSize,
+            height: Self.crosshairSize
+        )
 
         turnLeftButton.center = CGPoint(
             x: Self.edgeMargin + Self.turnButtonSize / 2,
