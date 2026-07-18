@@ -135,10 +135,8 @@ final class GameViewController: UIViewController {
         for projectile in projectileManager.alienProjectiles {
             projectileManager.removeAlienProjectile(projectile)
         }
-        shipController.isTurningLeft = false
-        shipController.isTurningRight = false
-        shipController.isAimingUp = false
-        shipController.isAimingDown = false
+        shipController.lateralInput = 0
+        shipController.verticalInput = 0
         hud.hideGameOver()
     }
 }
@@ -157,20 +155,9 @@ extension GameViewController: SCNSceneRendererDelegate {
 // MARK: - HUDOverlayDelegate
 
 extension GameViewController: HUDOverlayDelegate {
-    func hudDidChangeTurningLeft(_ isPressed: Bool) {
-        shipController.isTurningLeft = isPressed
-    }
-
-    func hudDidChangeTurningRight(_ isPressed: Bool) {
-        shipController.isTurningRight = isPressed
-    }
-
-    func hudDidChangeAimingUp(_ isPressed: Bool) {
-        shipController.isAimingUp = isPressed
-    }
-
-    func hudDidChangeAimingDown(_ isPressed: Bool) {
-        shipController.isAimingDown = isPressed
+    func hudDidChangeMovementVector(_ vector: CGVector) {
+        shipController.lateralInput = Float(vector.dx)
+        shipController.verticalInput = Float(vector.dy)
     }
 
     func hudDidTapFire() {

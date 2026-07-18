@@ -43,14 +43,10 @@ final class PlayerShipController {
 
     let shipNode: SCNNode
 
-    /// Maintenu à true tant que le bouton gauche est pressé (piloté par HUDOverlay).
-    var isTurningLeft = false
-    /// Maintenu à true tant que le bouton droit est pressé (piloté par HUDOverlay).
-    var isTurningRight = false
-    /// Maintenu à true tant que le bouton haut est pressé (piloté par HUDOverlay).
-    var isAimingUp = false
-    /// Maintenu à true tant que le bouton bas est pressé (piloté par HUDOverlay).
-    var isAimingDown = false
+    /// Entrée latérale analogique du joystick HUD, -1 (gauche) à +1 (droite).
+    var lateralInput: Float = 0
+    /// Entrée verticale analogique du joystick HUD, -1 (bas) à +1 (haut).
+    var verticalInput: Float = 0
 
     /// Position latérale courante (miroir de shipNode.position.x), exposée pour CameraRig.
     private(set) var positionX: Float = 0
@@ -67,22 +63,22 @@ final class PlayerShipController {
 
     func update(deltaTime: TimeInterval) {
         let dt = Float(deltaTime)
-        let lateralInput: Float = isTurningRight ? 1 : (isTurningLeft ? -1 : 0)
-        let verticalInput: Float = isAimingUp ? 1 : (isAimingDown ? -1 : 0)
+        let lateral = max(-1, min(1, lateralInput))
+        let vertical = max(-1, min(1, verticalInput))
 
         // Signe négatif : avec le forward -Z / up +Y / right +X standard de SceneKit,
         // une rotation Z positive lève le côté droit (bank gauche) — on veut l'inverse
         // (bank à droite, côté droit qui descend) quand on tourne à droite.
-        currentRollDegrees = smoothed(current: currentRollDegrees, target: -lateralInput * Self.rollAngleMaxDegrees, speed: Self.rollSmoothingSpeed, dt: dt)
-        currentPitchDegrees = smoothed(current: currentPitchDegrees, target: verticalInput * Self.pitchAngleMaxDegrees, speed: Self.pitchSmoothingSpeed, dt: dt)
+        currentRollDegrees = smoothed(current: currentRollDegrees, target: -lateral * Self.rollAngleMaxDegrees, speed: Self.rollSmoothingSpeed, dt: dt)
+        currentPitchDegrees = smoothed(current: currentPitchDegrees, target: vertical * Self.pitchAngleMaxDegrees, speed: Self.pitchSmoothingSpeed, dt: dt)
 
         (positionX, lateralVelocity) = updatedAxis(
-            position: positionX, velocity: lateralVelocity, input: lateralInput,
+            position: positionX, velocity: lateralVelocity, input: lateral,
             acceleration: Self.lateralAcceleration, maxSpeed: Self.lateralMaxSpeed,
             damping: Self.lateralDamping, bounds: Self.lateralBounds, dt: dt
         )
         (positionY, verticalVelocity) = updatedAxis(
-            position: positionY, velocity: verticalVelocity, input: verticalInput,
+            position: positionY, velocity: verticalVelocity, input: vertical,
             acceleration: Self.verticalAcceleration, maxSpeed: Self.verticalMaxSpeed,
             damping: Self.verticalDamping, bounds: Self.verticalBounds, dt: dt
         )
@@ -109,8 +105,12 @@ final class PlayerShipController {
     ) -> (position: Float, velocity: Float) {
         var newVelocity = velocity
         if input != 0 {
+            // La vitesse max est plafonnée proportionnellement à l'inclinaison du
+            // joystick, pas seulement le temps pour l'atteindre : une déviation
+            // partielle donne une vitesse de croisière plus lente, pas juste plus lente à atteindre.
+            let targetMaxSpeed = maxSpeed * abs(input)
             newVelocity += input * acceleration * dt
-            newVelocity = max(-maxSpeed, min(maxSpeed, newVelocity))
+            newVelocity = max(-targetMaxSpeed, min(targetMaxSpeed, newVelocity))
         } else {
             let dampT = 1 - exp(-damping * dt)
             newVelocity -= newVelocity * dampT

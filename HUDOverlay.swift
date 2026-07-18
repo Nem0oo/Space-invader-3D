@@ -1,19 +1,17 @@
 //
 // HUDOverlay.swift
 //
-// Overlay tactile UIKit (pas de storyboard) : virage bas-gauche (2 zones,
-// maintien), tir bas-droit (tap), cycle caméra en haut, score/vies dans le
-// coin opposé, écran de game over. Tout en code, layout à base de frames
-// recalculé dans layoutSubviews (orientation landscape fixe).
+// Overlay tactile UIKit (pas de storyboard) : joystick analogique bas-gauche
+// (mouvement latéral + vertical), tir bas-droit (tap), cycle caméra en haut,
+// score/vies dans le coin opposé, écran de game over. Tout en code, layout à
+// base de frames recalculé dans layoutSubviews (orientation landscape fixe).
 //
 
 import UIKit
 
 protocol HUDOverlayDelegate: AnyObject {
-    func hudDidChangeTurningLeft(_ isPressed: Bool)
-    func hudDidChangeTurningRight(_ isPressed: Bool)
-    func hudDidChangeAimingUp(_ isPressed: Bool)
-    func hudDidChangeAimingDown(_ isPressed: Bool)
+    /// vector.dx/dy dans [-1, 1] : latéral (droite positif) / vertical (haut positif).
+    func hudDidChangeMovementVector(_ vector: CGVector)
     func hudDidTapFire()
     func hudDidTapCameraModeCycle()
     func hudDidTapReplay()
@@ -23,22 +21,17 @@ final class HUDOverlay: UIView {
 
     // MARK: - Constantes ajustables (mise en page)
 
-    /// Boutons du D-pad (gauche/droite/haut/bas), plus petits qu'avant pour que les 4 tiennent en croix.
-    static let dpadButtonSize: CGFloat = 76
+    static let joystickDiameter: CGFloat = 150
     static let fireButtonSize: CGFloat = 96
     static let cameraButtonSize: CGFloat = 56
     static let edgeMargin: CGFloat = 28
-    static let buttonSpacing: CGFloat = 14
     static let controlAlpha: CGFloat = 0.32
     static let controlAlphaPressed: CGFloat = 0.55
     static let crosshairSize: CGFloat = 34
 
     weak var delegate: HUDOverlayDelegate?
 
-    private let turnLeftButton = UIButton(type: .custom)
-    private let turnRightButton = UIButton(type: .custom)
-    private let aimUpButton = UIButton(type: .custom)
-    private let aimDownButton = UIButton(type: .custom)
+    private let joystickView: JoystickView
     private let fireButton = UIButton(type: .custom)
     private let cameraModeButton = UIButton(type: .custom)
     private let cameraModeLabel = UILabel()
@@ -54,9 +47,11 @@ final class HUDOverlay: UIView {
     private let replayButton = UIButton(type: .system)
 
     override init(frame: CGRect) {
+        joystickView = JoystickView(diameter: Self.joystickDiameter, alpha: Self.controlAlpha)
         super.init(frame: frame)
         backgroundColor = .clear
         setupCrosshair()
+        setupJoystick()
         setupControls()
         setupHUDLabels()
         setupDebugLabel()
@@ -79,33 +74,20 @@ final class HUDOverlay: UIView {
         addSubview(crosshairView)
     }
 
+    private func setupJoystick() {
+        joystickView.onVectorChanged = { [weak self] vector in
+            self?.delegate?.hudDidChangeMovementVector(vector)
+        }
+        addSubview(joystickView)
+    }
+
     private func setupControls() {
-        styleControlButton(turnLeftButton, systemImage: "chevron.left.circle.fill", size: Self.dpadButtonSize)
-        styleControlButton(turnRightButton, systemImage: "chevron.right.circle.fill", size: Self.dpadButtonSize)
-        styleControlButton(aimUpButton, systemImage: "chevron.up.circle.fill", size: Self.dpadButtonSize)
-        styleControlButton(aimDownButton, systemImage: "chevron.down.circle.fill", size: Self.dpadButtonSize)
         styleControlButton(fireButton, systemImage: "bolt.fill", size: Self.fireButtonSize)
         styleControlButton(cameraModeButton, systemImage: "camera.rotate.fill", size: Self.cameraButtonSize)
-
-        turnLeftButton.addTarget(self, action: #selector(turnLeftDown), for: .touchDown)
-        turnLeftButton.addTarget(self, action: #selector(turnLeftUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
-
-        turnRightButton.addTarget(self, action: #selector(turnRightDown), for: .touchDown)
-        turnRightButton.addTarget(self, action: #selector(turnRightUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
-
-        aimUpButton.addTarget(self, action: #selector(aimUpDown), for: .touchDown)
-        aimUpButton.addTarget(self, action: #selector(aimUpUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
-
-        aimDownButton.addTarget(self, action: #selector(aimDownDown), for: .touchDown)
-        aimDownButton.addTarget(self, action: #selector(aimDownUp), for: [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit])
 
         fireButton.addTarget(self, action: #selector(fireTapped), for: .touchUpInside)
         cameraModeButton.addTarget(self, action: #selector(cameraModeTapped), for: .touchUpInside)
 
-        addSubview(turnLeftButton)
-        addSubview(turnRightButton)
-        addSubview(aimUpButton)
-        addSubview(aimDownButton)
         addSubview(fireButton)
         addSubview(cameraModeButton)
 
@@ -195,16 +177,10 @@ final class HUDOverlay: UIView {
             height: Self.crosshairSize
         )
 
-        // D-pad en croix : gauche/droite virent (roll + latéral), haut/bas visent
-        // les différentes lignes de la formation (pitch + vertical).
-        let dpadStep = Self.dpadButtonSize + Self.buttonSpacing
-        let dpadCenterX = Self.edgeMargin + Self.dpadButtonSize / 2 + dpadStep
-        let dpadCenterY = bounds.maxY - Self.edgeMargin - Self.dpadButtonSize / 2 - dpadStep
-
-        turnLeftButton.center = CGPoint(x: dpadCenterX - dpadStep, y: dpadCenterY)
-        turnRightButton.center = CGPoint(x: dpadCenterX + dpadStep, y: dpadCenterY)
-        aimUpButton.center = CGPoint(x: dpadCenterX, y: dpadCenterY - dpadStep)
-        aimDownButton.center = CGPoint(x: dpadCenterX, y: dpadCenterY + dpadStep)
+        joystickView.center = CGPoint(
+            x: Self.edgeMargin + Self.joystickDiameter / 2,
+            y: bounds.maxY - Self.edgeMargin - Self.joystickDiameter / 2
+        )
 
         fireButton.center = CGPoint(
             x: bounds.maxX - Self.edgeMargin - Self.fireButtonSize / 2,
@@ -225,7 +201,7 @@ final class HUDOverlay: UIView {
         scoreLabel.frame = CGRect(x: Self.edgeMargin, y: Self.edgeMargin, width: 200, height: 28)
         livesLabel.frame = CGRect(x: Self.edgeMargin, y: scoreLabel.frame.maxY + 4, width: 200, height: 24)
 
-        // Sous le bandeau score/vies/caméra, au-dessus du D-pad/viseur : évite tout chevauchement.
+        // Sous le bandeau score/vies/caméra, au-dessus du joystick/viseur : évite tout chevauchement.
         debugLabel.frame = CGRect(x: 12, y: 128, width: bounds.width - 24, height: 90)
 
         gameOverView.frame = bounds
@@ -270,46 +246,6 @@ final class HUDOverlay: UIView {
 
     // MARK: - Actions
 
-    @objc private func turnLeftDown() {
-        turnLeftButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
-        delegate?.hudDidChangeTurningLeft(true)
-    }
-
-    @objc private func turnLeftUp() {
-        turnLeftButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
-        delegate?.hudDidChangeTurningLeft(false)
-    }
-
-    @objc private func turnRightDown() {
-        turnRightButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
-        delegate?.hudDidChangeTurningRight(true)
-    }
-
-    @objc private func turnRightUp() {
-        turnRightButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
-        delegate?.hudDidChangeTurningRight(false)
-    }
-
-    @objc private func aimUpDown() {
-        aimUpButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
-        delegate?.hudDidChangeAimingUp(true)
-    }
-
-    @objc private func aimUpUp() {
-        aimUpButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
-        delegate?.hudDidChangeAimingUp(false)
-    }
-
-    @objc private func aimDownDown() {
-        aimDownButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlphaPressed)
-        delegate?.hudDidChangeAimingDown(true)
-    }
-
-    @objc private func aimDownUp() {
-        aimDownButton.backgroundColor = UIColor.white.withAlphaComponent(Self.controlAlpha)
-        delegate?.hudDidChangeAimingDown(false)
-    }
-
     @objc private func fireTapped() {
         delegate?.hudDidTapFire()
     }
@@ -320,5 +256,78 @@ final class HUDOverlay: UIView {
 
     @objc private func replayTapped() {
         delegate?.hudDidTapReplay()
+    }
+}
+
+/// Joystick virtuel : base fixe + poignée qui suit le doigt, plafonnée au rayon
+/// de la base. Émet un vecteur normalisé [-1, 1] par axe à chaque déplacement,
+/// (0, 0) au relâché. Écran → jeu : l'axe Y est inversé (UIKit vers le bas,
+/// "haut" du joystick = valeur positive).
+private final class JoystickView: UIView {
+
+    var onVectorChanged: ((CGVector) -> Void)?
+
+    private let knobView = UIView()
+    private let radius: CGFloat
+    private let restingAlpha: CGFloat
+
+    init(diameter: CGFloat, alpha: CGFloat) {
+        radius = diameter / 2
+        restingAlpha = alpha
+        super.init(frame: CGRect(x: 0, y: 0, width: diameter, height: diameter))
+
+        backgroundColor = UIColor.white.withAlphaComponent(alpha)
+        layer.cornerRadius = radius
+        isMultipleTouchEnabled = false
+
+        let knobDiameter = diameter * 0.48
+        knobView.frame = CGRect(
+            x: (diameter - knobDiameter) / 2, y: (diameter - knobDiameter) / 2,
+            width: knobDiameter, height: knobDiameter
+        )
+        knobView.backgroundColor = UIColor.white.withAlphaComponent(alpha + 0.3)
+        knobView.layer.cornerRadius = knobDiameter / 2
+        knobView.isUserInteractionEnabled = false
+        addSubview(knobView)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) non supporté") }
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        backgroundColor = UIColor.white.withAlphaComponent(restingAlpha + 0.1)
+        updateKnob(touches: touches)
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        updateKnob(touches: touches)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        resetKnob()
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        resetKnob()
+    }
+
+    private func updateKnob(touches: Set<UITouch>) {
+        guard let touch = touches.first else { return }
+        let point = touch.location(in: self)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        var dx = point.x - center.x
+        var dy = point.y - center.y
+        let distance = sqrt(dx * dx + dy * dy)
+        if distance > radius {
+            dx *= radius / distance
+            dy *= radius / distance
+        }
+        knobView.center = CGPoint(x: center.x + dx, y: center.y + dy)
+        onVectorChanged?(CGVector(dx: dx / radius, dy: -dy / radius))
+    }
+
+    private func resetKnob() {
+        backgroundColor = UIColor.white.withAlphaComponent(restingAlpha)
+        knobView.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        onVectorChanged?(.zero)
     }
 }
