@@ -14,7 +14,7 @@ final class GameScene {
 
     // MARK: - Constantes ajustables
 
-    static let starfieldBirthRate: CGFloat = 700
+    static let starfieldBirthRate: CGFloat = 350
     static let starfieldRadius: CGFloat = 220
     static let starfieldParticleSize: CGFloat = 0.35
     static let shipStartPosition = SCNVector3(0, 0, 0)
@@ -23,16 +23,25 @@ final class GameScene {
     let cameraRig = CameraRig()
     /// Parent commun des aliens, projectiles et explosions.
     let playfieldNode = SCNNode()
-    let shipNode: SCNNode
+    /// Nœud piloté par PlayerShipController (position/roll/pitch) — le mesh visuel
+    /// est un enfant séparé (voir shipMeshOrientationFix) pour ne pas se faire
+    /// écraser par les eulerAngles réécrits chaque frame.
+    let shipNode = SCNNode()
 
     private let alienTemplateNode: SCNNode
     var alienTemplate: SCNNode { alienTemplateNode }
 
     init() {
-        shipNode = GameScene.loadModelNode(named: "craft_speederA")
-        alienTemplateNode = GameScene.loadModelNode(named: "craft_miner")
-
+        let shipMesh = GameScene.loadModelNode(named: "craft_speederA")
+        // Le modèle fait face à la caméra par défaut ; on le retourne pour qu'il
+        // pointe vers -Z (sens d'avancée/de tir). Sur un nœud enfant dédié pour ne
+        // pas interférer avec le roll/pitch appliqués sur shipNode par
+        // PlayerShipController à chaque frame.
+        shipMesh.eulerAngles.y = .pi
+        shipNode.addChildNode(shipMesh)
         shipNode.position = Self.shipStartPosition
+
+        alienTemplateNode = GameScene.loadModelNode(named: "craft_miner")
 
         scene.rootNode.addChildNode(playfieldNode)
         scene.rootNode.addChildNode(shipNode)

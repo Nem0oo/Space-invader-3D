@@ -30,8 +30,13 @@ final class ProjectileManager {
     static let projectileLength: Float = 0.9
     static let playerProjectileColor: UIColor = .cyan
     static let alienProjectileColor = UIColor(red: 1, green: 0.25, blue: 0.2, alpha: 1)
-    /// Bornes Z au-delà desquelles un projectile est nettoyé sans avoir touché sa cible.
-    static let cleanupZRange: ClosedRange<Float> = -140...20
+    /// Distance Z (depuis le vaisseau, ~0) au-delà de laquelle un tir manqué est
+    /// nettoyé — juste au-delà de la formation la plus profonde (startZ le plus
+    /// négatif défini dans Resources/Assets/Levels), pour que l'attente avant de
+    /// pouvoir retirer après un tir raté reste courte.
+    static let playerCleanupZ: Float = -75
+    /// Distance Z au-delà de laquelle un tir alien est nettoyé (proche caméra).
+    static let alienCleanupZ: Float = 20
 
     static let explosionDuration: TimeInterval = 0.6
     static let explosionBirthRate: CGFloat = 300
@@ -83,7 +88,7 @@ final class ProjectileManager {
 
         if let projectile = playerProjectile {
             projectile.node.position.z -= Self.playerProjectileSpeed * dt
-            if projectile.node.position.z < Self.cleanupZRange.lowerBound {
+            if projectile.node.position.z < Self.playerCleanupZ {
                 removePlayerProjectile()
             }
         }
@@ -92,7 +97,7 @@ final class ProjectileManager {
         stillAlive.reserveCapacity(alienProjectiles.count)
         for projectile in alienProjectiles {
             projectile.node.position.z += Self.alienProjectileSpeed * dt
-            if projectile.node.position.z > Self.cleanupZRange.upperBound {
+            if projectile.node.position.z > Self.alienCleanupZ {
                 projectile.node.removeFromParentNode()
             } else {
                 stillAlive.append(projectile)
