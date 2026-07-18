@@ -46,6 +46,8 @@ final class HUDOverlay: UIView {
     private let livesLabel = UILabel()
     private let crosshairView = UIImageView()
 
+    private let debugLabel = UILabel()
+
     private let gameOverView = UIView()
     private let gameOverTitleLabel = UILabel()
     private let gameOverScoreLabel = UILabel()
@@ -57,6 +59,7 @@ final class HUDOverlay: UIView {
         setupCrosshair()
         setupControls()
         setupHUDLabels()
+        setupDebugLabel()
         setupGameOverView()
     }
 
@@ -141,6 +144,19 @@ final class HUDOverlay: UIView {
         updateLives(GameState.startingLives)
     }
 
+    /// Bandeau de diagnostic temporaire : affiche directement dans l'app la vraie
+    /// erreur de chargement d'asset (voir GameScene.loadDiagnostics), pour ne pas
+    /// dépendre d'un accès aux logs système selon l'outil de sideload utilisé.
+    private func setupDebugLabel() {
+        debugLabel.numberOfLines = 0
+        debugLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        debugLabel.textColor = .white
+        debugLabel.backgroundColor = UIColor.red.withAlphaComponent(0.55)
+        debugLabel.textAlignment = .center
+        debugLabel.isHidden = true
+        addSubview(debugLabel)
+    }
+
     private func setupGameOverView() {
         gameOverView.backgroundColor = UIColor.black.withAlphaComponent(0.72)
         gameOverView.isHidden = true
@@ -209,6 +225,9 @@ final class HUDOverlay: UIView {
         scoreLabel.frame = CGRect(x: Self.edgeMargin, y: Self.edgeMargin, width: 200, height: 28)
         livesLabel.frame = CGRect(x: Self.edgeMargin, y: scoreLabel.frame.maxY + 4, width: 200, height: 24)
 
+        // Sous le bandeau score/vies/caméra, au-dessus du D-pad/viseur : évite tout chevauchement.
+        debugLabel.frame = CGRect(x: 12, y: 128, width: bounds.width - 24, height: 90)
+
         gameOverView.frame = bounds
         gameOverTitleLabel.frame = CGRect(x: 0, y: bounds.midY - 70, width: bounds.width, height: 44)
         gameOverScoreLabel.frame = CGRect(x: 0, y: gameOverTitleLabel.frame.maxY + 8, width: bounds.width, height: 28)
@@ -236,6 +255,17 @@ final class HUDOverlay: UIView {
 
     func hideGameOver() {
         gameOverView.isHidden = true
+    }
+
+    /// Affiche les diagnostics de chargement d'assets directement dans l'app.
+    /// À retirer une fois le chargement des modèles fiabilisé.
+    func showDebugMessages(_ messages: [String]) {
+        guard !messages.isEmpty else {
+            debugLabel.isHidden = true
+            return
+        }
+        debugLabel.text = messages.joined(separator: "\n")
+        debugLabel.isHidden = false
     }
 
     // MARK: - Actions

@@ -41,6 +41,7 @@ final class GameViewController: UIViewController {
         setupHUD()
         wireCallbacks()
         gameState.reset()
+        hud.showDebugMessages(GameScene.loadDiagnostics)
     }
 
     override var prefersStatusBarHidden: Bool { true }

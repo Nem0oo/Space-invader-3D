@@ -106,10 +106,23 @@ final class GameScene {
 
     private static let utf8BOM: [UInt8] = [0xEF, 0xBB, 0xBF]
 
+    /// Diagnostics de chargement d'assets, affichables directement dans le HUD
+    /// (GameViewController) — évite de dépendre d'un accès aux logs système, pas
+    /// toujours disponible selon l'outil de sideload utilisé.
+    private(set) static var loadDiagnostics: [String] = []
+
+    private static func recordDiagnostic(_ message: String) {
+        print("⚠️ SpaceInvaders3D: \(message)")
+        loadDiagnostics.append(message)
+    }
+
     private static func loadModelNode(named name: String) -> SCNNode {
-        guard let url = Bundle.assetURL(name, withExtension: "dae"),
-              var data = try? Data(contentsOf: url) else {
-            print("⚠️ SpaceInvaders3D: \(name).dae introuvable dans le bundle (Assets/)")
+        guard let url = Bundle.assetURL(name, withExtension: "dae") else {
+            recordDiagnostic("\(name).dae : Bundle.assetURL a retourné nil (fichier introuvable dans Assets/)")
+            return placeholderNode()
+        }
+        guard var data = try? Data(contentsOf: url) else {
+            recordDiagnostic("\(name).dae : Data(contentsOf:) a échoué pour \(url.path)")
             return placeholderNode()
         }
 
@@ -129,6 +142,10 @@ final class GameScene {
             try data.write(to: strippedURL, options: .atomic)
             let source = try SCNScene(url: strippedURL, options: nil)
             let node = source.rootNode.clone()
+            guard !node.childNodes.isEmpty else {
+                recordDiagnostic("\(name).dae : chargé sans erreur mais rootNode.childNodes est vide")
+                return placeholderNode()
+            }
             // Certains exports .dae ont un winding order inversé : sans double-face,
             // SceneKit peut culler la totalité des triangles et rendre le modèle invisible
             // tout en le gardant fonctionnellement en place (transform/collisions correctes).
@@ -137,7 +154,7 @@ final class GameScene {
             }
             return node
         } catch {
-            print("⚠️ SpaceInvaders3D: échec de chargement de \(name).dae : \(error)")
+            recordDiagnostic("\(name).dae : échec SCNScene(url:) — \(error)")
             return placeholderNode()
         }
     }
