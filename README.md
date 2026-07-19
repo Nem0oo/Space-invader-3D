@@ -61,6 +61,11 @@ docker run --rm -v ./:/home/builder/code -w /home/builder/code docker.io/nem0oo/
 
 L'identifiant du bundle est `fr.gcourtot.spaceinvaders3d`.
 
+## CI
+
+- `.github/workflows/build.yml` : build de sideload (signature ldid, comme en local) à chaque push/tag `v*`, publie une Release GitHub avec l'IPA.
+- `.github/workflows/appstore.yml` : publication App Store — Theos compile non signé, un job macOS signe avec un vrai certificat Apple Distribution et uploade vers App Store Connect/TestFlight. Déclenchement manuel uniquement. Voir [`APPSTORE_SETUP.md`](APPSTORE_SETUP.md) pour la mise en place (certificat, profil, clé API).
+
 ## Licence
 
 Projet personnel, non destiné à une distribution publique.

@@ -1,0 +1,162 @@
+name: App Store Release
+
+# Déclenchement manuel uniquement : une publication App Store est une action
+# volontaire, pas quelque chose qui doit partir sur un simple push. Voir
+# APPSTORE_SETUP.md pour la liste complète des secrets à configurer avant de
+# pouvoir lancer ce workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version utilisateur à publier (CFBundleShortVersionString), ex: 1.0.0"
+        required: true
+
+jobs:
+  build_unsigned:
+    name: Compiler (Theos, non signé)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull Theos image
+        run: docker pull docker.io/nem0oo/theos
+
+      # Le runner a l'uid 1001 mais l'utilisateur builder de l'image a l'uid 1000
+      - name: Make workspace writable by builder
+        run: chmod -R a+rwX ${{ github.workspace }}
+
+      - name: Fixer la version et le numéro de build
+        run: |
+          python3 - <<'PY'
+          import plistlib
+          path = "Resources/Info.plist"
+          with open(path, "rb") as f:
+              data = plistlib.load(f)
+          data["CFBundleShortVersionString"] = "${{ inputs.version }}"
+          data["CFBundleVersion"] = "${{ github.run_number }}"
+          with open(path, "wb") as f:
+              plistlib.dump(data, f)
+          PY
+          sed -i "s/^Version:.*/Version: ${{ inputs.version }}/" control
+
+      # Pas de PACKAGE_FORMAT ici : on ne veut pas de la signature ldid de Theos
+      # (adaptée au sideload, pas à l'App Store), juste le .app compilé et staged.
+      # Il sera signé pour de vrai avec un certificat Apple Distribution dans le
+      # job macOS suivant.
+      - name: Compiler
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/home/builder/code \
+            -w /home/builder/code \
+            docker.io/nem0oo/theos \
+            make FINALPACKAGE=1
+
+      - name: Localiser et exporter le .app compilé
+        run: |
+          # maxdepth 1 : .theos/obj/arm64/SpaceInvaders3D.app existe aussi mais
+          # c'est juste une tranche binaire intermédiaire par archi, sans
+          # Info.plist/Assets. Le bundle final et complet est directement sous obj/.
+          APP_PATH=$(find .theos/obj -maxdepth 1 -name "*.app" -type d | head -n1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::Aucun .app trouvé sous .theos/obj — la compilation a probablement échoué."
+            exit 1
+          fi
+          mkdir -p unsigned
+          cp -R "$APP_PATH" unsigned/
+
+      - name: Upload de l'artefact non signé
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-app
+          path: unsigned/*.app
+          if-no-files-found: error
+
+  sign_and_publish:
+    name: Signer et uploader sur App Store Connect
+    needs: build_unsigned
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download de l'artefact non signé
+        uses: actions/download-artifact@v4
+        with:
+          name: unsigned-app
+          path: unsigned
+
+      - name: Installer les gems (fastlane)
+        run: bundle install
+
+      # Recette standard de signing CI : trousseau temporaire dédié, importe le
+      # certificat de distribution, l'ajoute à la liste de recherche des
+      # trousseaux pour que codesign le trouve.
+      - name: Importer le certificat de distribution
+        env:
+          APPSTORE_CERTIFICATE_P12: ${{ secrets.APPSTORE_CERTIFICATE_P12 }}
+          APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/appstore-signing.keychain-db"
+
+          echo -n "$APPSTORE_CERTIFICATE_P12" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$APPSTORE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+      - name: Installer le profil de provisioning
+        env:
+          APPSTORE_PROVISIONING_PROFILE: ${{ secrets.APPSTORE_PROVISIONING_PROFILE }}
+        run: |
+          PROFILE_PATH="$RUNNER_TEMP/appstore.mobileprovision"
+          echo -n "$APPSTORE_PROVISIONING_PROFILE" | base64 --decode -o "$PROFILE_PATH"
+          mkdir -p ~/Library/MobileDevice/"Provisioning Profiles"
+          cp "$PROFILE_PATH" ~/Library/MobileDevice/"Provisioning Profiles"/appstore.mobileprovision
+          echo "PROFILE_PATH=$PROFILE_PATH" >> "$GITHUB_ENV"
+
+      # Les entitlements viennent du profil de provisioning App Store, PAS du
+      # Resources/entitlements.plist du repo (celui-ci porte platform-application,
+      # spécifique au sideload/Theos — invalide et inapproprié pour un vrai
+      # binaire App Store).
+      - name: Signer l'app
+        env:
+          APPSTORE_SIGNING_IDENTITY: ${{ secrets.APPSTORE_SIGNING_IDENTITY }}
+        run: |
+          APP_PATH=$(find unsigned -maxdepth 1 -name "*.app" -type d | head -n1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::Aucun .app trouvé dans l'artefact téléchargé."
+            exit 1
+          fi
+
+          cp "$PROFILE_PATH" "$APP_PATH/embedded.mobileprovision"
+
+          security cms -D -i "$PROFILE_PATH" > "$RUNNER_TEMP/profile.plist"
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$RUNNER_TEMP/profile.plist" > entitlements.plist
+
+          codesign --force --sign "$APPSTORE_SIGNING_IDENTITY" --entitlements entitlements.plist "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      - name: Empaqueter l'IPA
+        run: |
+          APP_NAME=$(basename "$APP_PATH")
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qr "${APP_NAME%.app}.ipa" Payload
+          echo "IPA_PATH=${APP_NAME%.app}.ipa" >> "$GITHUB_ENV"
+
+      # Upload seulement : le build devient disponible dans App Store
+      # Connect/TestFlight, sans soumission automatique pour App Review (les
+      # métadonnées/captures d'écran/etc. se gèrent à la main dans App Store
+      # Connect — voir APPSTORE_SETUP.md).
+      - name: Uploader vers App Store Connect (TestFlight)
+        env:
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+        run: bundle exec fastlane publish_appstore ipa_path:"$IPA_PATH"
