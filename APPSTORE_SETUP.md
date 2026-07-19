@@ -114,11 +114,12 @@ Repo GitHub → Actions → **App Store Release** → Run workflow → renseigne
 version (ex. `1.0.0`) → Run. Le numéro de build (`CFBundleVersion`) est
 généré automatiquement à partir du numéro de run GitHub, donc toujours unique.
 
-## Point bloquant connu : icône d'app manquante
+## Icône
 
-Ce projet n'a pas d'icône d'app configurée (`Resources/Info.plist` n'a pas de
-`CFBundleIconFile`, aucun asset d'icône dans `Resources/Assets/`) — c'était
-volontaire pour un POC de sideload. **App Store Connect refusera le build**
-sans icône (1024×1024 minimum, plus les tailles par appareil). Le pipeline CI
-ci-dessus fonctionne mécaniquement sans, mais la validation Apple à l'upload
-échouera tant qu'une vraie icône n'est pas ajoutée au projet.
+Les tailles embarquées dans le binaire (20/29/40/60pt @2x/@3x, écran
+d'accueil/Spotlight/Réglages) sont dans `Resources/` et déjà déclarées dans
+`Info.plist` via `CFBundleIcons`. La grande icône App Store (1024×1024, sans
+alpha) n'est **pas** embarquée dans le binaire — Apple l'attend séparément :
+`AppIcon-Marketing-1024.png` à la racine du repo, à uploader à la main dans
+App Store Connect (App Information → App Store icon) au moment de préparer
+la fiche/version.
