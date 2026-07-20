@@ -14,6 +14,7 @@ protocol HUDOverlayDelegate: AnyObject {
     func hudDidChangeMovementVector(_ vector: CGVector)
     func hudDidTapFire()
     func hudDidTapCameraModeCycle()
+    func hudDidTapStereoToggle()
     func hudDidTapReplay()
 }
 
@@ -35,6 +36,7 @@ final class HUDOverlay: UIView {
     private let fireButton = UIButton(type: .custom)
     private let cameraModeButton = UIButton(type: .custom)
     private let cameraModeLabel = UILabel()
+    private let stereoButton = UIButton(type: .custom)
     private let scoreLabel = UILabel()
     private let livesLabel = UILabel()
     private let crosshairView = UIImageView()
@@ -84,12 +86,15 @@ final class HUDOverlay: UIView {
     private func setupControls() {
         styleControlButton(fireButton, systemImage: "bolt.fill", size: Self.fireButtonSize)
         styleControlButton(cameraModeButton, systemImage: "camera.rotate.fill", size: Self.cameraButtonSize)
+        styleControlButton(stereoButton, systemImage: "rectangle.split.2x1.fill", size: Self.cameraButtonSize)
 
         fireButton.addTarget(self, action: #selector(fireTapped), for: .touchUpInside)
         cameraModeButton.addTarget(self, action: #selector(cameraModeTapped), for: .touchUpInside)
+        stereoButton.addTarget(self, action: #selector(stereoTapped), for: .touchUpInside)
 
         addSubview(fireButton)
         addSubview(cameraModeButton)
+        addSubview(stereoButton)
 
         cameraModeLabel.text = CameraMode.full.label
         cameraModeLabel.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
@@ -198,6 +203,12 @@ final class HUDOverlay: UIView {
             height: 16
         )
 
+        // Sous le bouton/label caméra, expérimental (branche stéréogramme).
+        stereoButton.center = CGPoint(
+            x: bounds.maxX - Self.edgeMargin - Self.cameraButtonSize / 2,
+            y: cameraModeLabel.frame.maxY + Self.edgeMargin / 2 + Self.cameraButtonSize / 2
+        )
+
         scoreLabel.frame = CGRect(x: Self.edgeMargin, y: Self.edgeMargin, width: 200, height: 28)
         livesLabel.frame = CGRect(x: Self.edgeMargin, y: scoreLabel.frame.maxY + 4, width: 200, height: 24)
 
@@ -222,6 +233,15 @@ final class HUDOverlay: UIView {
 
     func updateCameraMode(_ mode: CameraMode) {
         cameraModeLabel.text = mode.label
+    }
+
+    /// Reflète l'état on/off du mode stéréogramme sur le bouton (c'est un
+    /// bascule, pas une action ponctuelle — l'état visuel doit persister), et
+    /// masque le viseur central (pertinent uniquement pour la vue simple
+    /// plein écran — StereoView a ses propres petits viseurs par vignette).
+    func setStereoActive(_ isActive: Bool) {
+        stereoButton.backgroundColor = UIColor.white.withAlphaComponent(isActive ? Self.controlAlphaPressed : Self.controlAlpha)
+        crosshairView.isHidden = isActive
     }
 
     func showGameOver(finalScore: Int) {
@@ -252,6 +272,10 @@ final class HUDOverlay: UIView {
 
     @objc private func cameraModeTapped() {
         delegate?.hudDidTapCameraModeCycle()
+    }
+
+    @objc private func stereoTapped() {
+        delegate?.hudDidTapStereoToggle()
     }
 
     @objc private func replayTapped() {

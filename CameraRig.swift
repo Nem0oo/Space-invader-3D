@@ -46,7 +46,19 @@ final class CameraRig {
     /// Légère inclinaison vers le bas pour bien cadrer le vaisseau.
     static let downwardTiltRadians: Float = -0.12
 
+    /// Écart entre les deux caméras œil du mode stéréogramme (vision parallèle),
+    /// en unités monde. Volontairement très exagéré par rapport à l'écart
+    /// interoculaire humain réel (~0.063) : à ces distances de jeu (aliens à
+    /// 10-70 unités de la caméra), un écart réaliste donnerait un relief
+    /// quasi imperceptible. Départ à ajuster après test visuel.
+    static let stereoEyeSeparation: Float = 0.7
+
     let cameraNode: SCNNode
+    /// Enfants de cameraNode : héritent automatiquement de sa position/rotation
+    /// (mode, lag) chaque frame, sans code de synchronisation supplémentaire.
+    let leftEyeCameraNode = SCNNode()
+    let rightEyeCameraNode = SCNNode()
+
     private(set) var mode: CameraMode = .full
     private var laggedX: Float = 0
     private var laggedY: Float = 0
@@ -60,11 +72,30 @@ final class CameraRig {
         cameraNode.camera = camera
         cameraNode.eulerAngles.x = Self.downwardTiltRadians
         applyOffset(targetX: 0, targetY: 0)
+
+        let leftCamera = SCNCamera()
+        leftCamera.zNear = camera.zNear
+        leftCamera.zFar = camera.zFar
+        leftCamera.fieldOfView = camera.fieldOfView
+        leftEyeCameraNode.camera = leftCamera
+        leftEyeCameraNode.position = SCNVector3(-Self.stereoEyeSeparation / 2, 0, 0)
+        cameraNode.addChildNode(leftEyeCameraNode)
+
+        let rightCamera = SCNCamera()
+        rightCamera.zNear = camera.zNear
+        rightCamera.zFar = camera.zFar
+        rightCamera.fieldOfView = camera.fieldOfView
+        rightEyeCameraNode.camera = rightCamera
+        rightEyeCameraNode.position = SCNVector3(Self.stereoEyeSeparation / 2, 0, 0)
+        cameraNode.addChildNode(rightEyeCameraNode)
     }
 
     func cycleMode() {
         mode = (mode == .full) ? .partial : .full
-        cameraNode.camera?.fieldOfView = mode.fieldOfView
+        let fov = mode.fieldOfView
+        cameraNode.camera?.fieldOfView = fov
+        leftEyeCameraNode.camera?.fieldOfView = fov
+        rightEyeCameraNode.camera?.fieldOfView = fov
     }
 
     func update(deltaTime: TimeInterval, shipPositionX: Float, shipPositionY: Float) {

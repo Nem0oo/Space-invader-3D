@@ -22,6 +22,8 @@ final class GameViewController: UIViewController {
 
     private var sceneKitView: SCNView!
     private var hud: HUDOverlay!
+    private var stereoView: StereoView!
+    private var isStereoActive = false
 
     private let gameScene = GameScene()
     private lazy var shipController = PlayerShipController(shipNode: gameScene.shipNode)
@@ -38,6 +40,7 @@ final class GameViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupSceneView()
+        setupStereoView()
         setupHUD()
         wireCallbacks()
         gameState.reset()
@@ -60,6 +63,25 @@ final class GameViewController: UIViewController {
         scnView.isPlaying = true
         view.addSubview(scnView)
         sceneKitView = scnView
+    }
+
+    /// Mode stéréogramme expérimental (branche dédiée) : masqué par défaut. Le
+    /// SCNView principal (sceneKitView), lui, reste toujours en isPlaying=true
+    /// même masqué — c'est son SCNSceneRendererDelegate qui pilote toute la
+    /// boucle de jeu (voir renderer(_:updateAtTime:) plus bas) ; le mettre en
+    /// pause figerait le jeu entier, pas juste son affichage.
+    private func setupStereoView() {
+        let stereo = StereoView(frame: view.bounds)
+        stereo.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        stereo.configure(
+            scene: gameScene.scene,
+            leftCamera: gameScene.cameraRig.leftEyeCameraNode,
+            rightCamera: gameScene.cameraRig.rightEyeCameraNode
+        )
+        stereo.isHidden = true
+        stereo.isPlaying = false
+        view.addSubview(stereo)
+        stereoView = stereo
     }
 
     private func setupHUD() {
@@ -170,6 +192,14 @@ extension GameViewController: HUDOverlayDelegate {
         hud.updateCameraMode(gameScene.cameraRig.mode)
     }
 
+    func hudDidTapStereoToggle() {
+        isStereoActive.toggle()
+        sceneKitView.isHidden = isStereoActive
+        stereoView.isHidden = !isStereoActive
+        stereoView.isPlaying = isStereoActive
+        hud.setStereoActive(isStereoActive)
+    }
+
     func hudDidTapReplay() {
         resetGame()
     }
@@ -179,7 +209,10 @@ extension GameViewController: HUDOverlayDelegate {
 
 extension GameViewController: GameStateDelegate {
     func gameStateDidUpdateScore(_ score: Int) {
-        DispatchQueue.main.async { [weak self] in self?.hud.updateScore(score) }
+        DispatchQueue.main.async { [weak self] in
+            self?.hud.updateScore(score)
+            self?.stereoView.updateScore(score)
+        }
     }
 
     func gameStateDidUpdateLives(_ lives: Int) {
